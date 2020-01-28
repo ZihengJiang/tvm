@@ -472,3 +472,11 @@ def exponent_based_two(val):
     if cond: 
         return cond, round(exponent)
     return cond, exponent
+
+
+def to_scalar(constant):
+    assert isinstance(constant, relay.Constant)
+    scalar = constant.data.asnumpy()
+    assert scalar.size == 1
+    return scalar.item()
+

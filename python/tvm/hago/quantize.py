@@ -251,10 +251,10 @@ class Simulator(tvm.relay.ExprMutator):
         for idx, src in enumerate(node.args):
             param = self._op_params[0][self._edge2idx[(src, node)]]
             new_arg = _quantize.simulated_quantize(new_node.args[idx],
-                                                   param.in_scale,
-                                                   param.out_scale,
-                                                   param.clip_min,
-                                                   param.clip_max,
+                                                   relay.const(param.in_scale, "float32"),
+                                                   relay.const(param.out_scale, "float32"),
+                                                   relay.const(param.clip_min, "int64"),
+                                                   relay.const(param.clip_max, "int64"),
                                                    param.in_dtype,
                                                    param.out_dtype,
                                                    True,
@@ -271,10 +271,10 @@ class Simulator(tvm.relay.ExprMutator):
         assert isinstance(fn.body, relay.Call)
         param = self._op_params[1][0]
         new_body = _quantize.simulated_quantize(fn.body,
-                                                param.in_scale,
-                                                param.out_scale,
-                                                param.clip_min,
-                                                param.clip_max,
+                                                relay.const(param.in_scale, "float32"),
+                                                relay.const(param.out_scale, "float32"),
+                                                relay.const(param.clip_min, "int64"),
+                                                relay.const(param.clip_max, "int64"),
                                                 param.in_dtype,
                                                 param.out_dtype,
                                                 True,
@@ -333,16 +333,17 @@ def _realize(simulated_graph, node2cstr):
         return out
     
     def realize_simulated_quantize(node):
-        data = node.args[0]
-        attrs = node.attrs
-        in_scale = float(attrs.in_scale)
-        out_scale = float(attrs.out_scale)
-        clip_min = attrs.clip_min
-        clip_max = attrs.clip_max
-        in_dtype = attrs.in_dtype
-        out_dtype = attrs.out_dtype
+        data, in_scale, out_scale, clip_min, clip_max = node.args
+        in_scale = to_scalar(in_scale)
+        out_scale = to_scalar(out_scale)
+        clip_min = to_scalar(clip_min)
+        clip_max = to_scalar(clip_max)
         print('  in_scale: {}'.format(in_scale))
         print('  out_scale: {}'.format(out_scale))
+
+        attrs = node.attrs
+        in_dtype = attrs.in_dtype
+        out_dtype = attrs.out_dtype
     
         if in_dtype == 'float32' and out_dtype == 'float32':
             # do nothing

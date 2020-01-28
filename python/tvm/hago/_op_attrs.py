@@ -103,15 +103,19 @@ def check_overflow(data, in_dtype, output):
 @_reg.register_compute("hago.simulated_quantize")
 def simulated_quantize_compute(attrs, inputs, out_type, target):
     """Compiler for simulated_quantize."""
-    assert len(inputs) == 1
+    assert len(inputs) == 5
     assert attrs.sign
     assert attrs.rounding == "round"
 
     data = inputs[0]
-    in_scale = float(attrs.in_scale)
-    out_scale = float(attrs.out_scale)
-    clip_min = attrs.clip_min
-    clip_max = attrs.clip_max
+    in_scale = inputs[1]
+    out_scale = inputs[2]
+    clip_min = inputs[3]
+    clip_max = inputs[4]
+    # in_scale = float(attrs.in_scale)
+    # out_scale = float(attrs.out_scale)
+    # clip_min = attrs.clip_min
+    # clip_max = attrs.clip_max
 
     # simulate overflow truncate error
     if attrs.in_dtype != 'float32':
@@ -125,7 +129,7 @@ def simulated_quantize_compute(attrs, inputs, out_type, target):
         data = topi.cast(data, attrs.in_dtype)
         data = topi.multiply(data, in_scale)
     data = my_print(data, '*******************************************')
-    data = my_print(data, "[in_scale={}, out_scale={}, clip_min={}, clip_max={}, in_dtype={}, out_dtype={}".format(in_scale, out_scale, clip_min, clip_max, attrs.in_dtype, attrs.out_dtype))
+    # data = my_print(data, "[in_scale={}, out_scale={}, clip_min={}, clip_max={}, in_dtype={}, out_dtype={}".format(in_scale, out_scale, clip_min, clip_max, attrs.in_dtype, attrs.out_dtype))
 
     # dequantize, directly return real value
     if attrs.out_dtype == 'float32':
@@ -136,7 +140,9 @@ def simulated_quantize_compute(attrs, inputs, out_type, target):
     scaled_data = topi.divide(data, out_scale)
     # scaled_data = inspect(scaled_data, 'scaled data')
     scaled_data = topi.round(scaled_data)
-    clipped_data = topi.clip(scaled_data, float(clip_min), float(clip_max))
+    clipped_data = topi.maximum(scaled_data, clip_min)
+    clipped_data = topi.minimum(clipped_data, clip_max)
+    # clipped_data = topi.clip(scaled_data, clip_min, clip_max)
     # clipped_data = inspect(clipped_data, 'clipped data')
     round_data = topi.cast(topi.cast(clipped_data, attrs.out_dtype), 'float32')
     # round_data = inspect(round_data, 'round data')
@@ -270,12 +276,6 @@ def forward_op(ref_call, args):
     return relay.Call(
         ref_call.op, args, ref_call.attrs, ref_call.type_args)
 
-
-def to_scalar(constant):
-    assert isinstance(constant, relay.Constant)
-    scalar = constant.data.asnumpy()
-    assert scalar.size == 1
-    return scalar.item()
 
 # TODO(ziheng) change to op_desc in the future
 @register_realize("add")

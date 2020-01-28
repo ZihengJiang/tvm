@@ -86,7 +86,7 @@ def get_model(model_name, batch_size, qconfig, original=False, simulated=False, 
         logging.debug(quantized_graph.astext(show_meta_data=False))
         out, acc = hago.eval_acc(quantized_graph, calib_set)
         print('quantized accuracy on calibration dataset: {}'.format(acc))
-        hago.inspect_graph_statistic(qmod['main'], hardware, strategy, dataset=calib_set)
+        # hago.inspect_graph_statistic(qmod['main'], hardware, strategy, dataset=calib_set)
         qmod = relay.Module.from_expr(quantized_graph)
         raise ValueError
     return qmod
@@ -136,7 +136,7 @@ def get_calibration_dataset(dataset, batch_fn, num_samples=100):
 
 def test_quantize_acc(cfg, rec_val):
     qconfig = hago.qconfig(skip_conv_layers=[0],
-                           search_strategy="greedy_squash")
+                           search_strategy="default_setting")
 
     val_data, batch_fn = get_val_data(cfg.model, rec_val=rec_val, batch_size=32)
     calib_set = get_calibration_dataset(val_data, batch_fn)
@@ -150,7 +150,7 @@ def test_quantize_acc(cfg, rec_val):
 
 if __name__ == "__main__":
     #TODO(for user): replace the line with the path to imagenet validation dataset
-    rec_val = "/home/ziheng/.mxnet/datasets/imagenet/rec/val.rec"
+    rec_val = "/data/datasets/imagenet/rec/val.rec"
 
     results = []
     configs = [

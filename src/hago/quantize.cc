@@ -44,7 +44,7 @@ bool SimulatedQuantizeRel(const Array<Type>& types,
                           int num_inputs,
                           const Attrs& attrs,
                           const TypeReporter& reporter) {
-  CHECK_EQ(types.size(), 2);
+  CHECK_EQ(types.size(), 6);
   const auto param = attrs.as<SimulatedQuantizeAttrs>();
   CHECK(param != nullptr);
 
@@ -52,34 +52,38 @@ bool SimulatedQuantizeRel(const Array<Type>& types,
   CHECK(data != nullptr);
   CHECK_NE(data->shape.size(), 0) << "Input shape cannot be empty";
 
-  reporter->Assign(types[0], types[1]);                                // output
+  reporter->Assign(types[1], TensorType({}, DataType::Float(32)));     // in_scale
+  reporter->Assign(types[2], TensorType({}, DataType::Float(32)));     // out_scale
+  reporter->Assign(types[3], TensorType({}, DataType::Int(64)));       // clip_min
+  reporter->Assign(types[4], TensorType({}, DataType::Int(64)));       // clip_max
+  reporter->Assign(types[5], types[0]);                                // output
   return true;
 }
 
 
 RELAY_REGISTER_OP("hago.simulated_quantize")
 .describe(R"code(simulated quantize op)code" TVM_ADD_FILELINE)
-.set_num_inputs(1)
+.set_num_inputs(5)
 .add_argument("data", "Tensor", "The input data.")
+.add_argument("in_scale", "Scalar", "The input scale.")
+.add_argument("out_scale", "Scalar", "The output scale.")
+.add_argument("clip_min", "Scalar", "The clip minimum.")
+.add_argument("clip_max", "Scalar", "The clip maximum.")
 .set_attrs_type<SimulatedQuantizeAttrs>()
 .set_support_level(11)
 .add_type_rel("SimulatedQuantize", SimulatedQuantizeRel);
 
 TVM_REGISTER_GLOBAL("hago._quantize.simulated_quantize")
 .set_body_typed(
-  [](Expr data, double in_scale, double out_scale, int64_t clip_min, int64_t clip_max,
+  [](Expr data, Expr in_scale, Expr out_scale, Expr clip_min, Expr clip_max,
      DataType in_dtype, DataType out_dtype, bool sign, std::string rounding) {
     auto attrs = make_object<SimulatedQuantizeAttrs>();
-    attrs->in_scale = in_scale;
-    attrs->out_scale = out_scale;
-    attrs->clip_min = clip_min;
-    attrs->clip_max = clip_max;
     attrs->in_dtype = in_dtype;
     attrs->out_dtype = out_dtype;
     attrs->sign = sign;
     attrs->rounding = rounding;
     static const Op& op = Op::Get("hago.simulated_quantize");
-    return CallNode::make(op, {data}, Attrs(attrs), {});
+    return CallNode::make(op, {data, in_scale, out_scale, clip_min, clip_max}, Attrs(attrs), {});
   });
 
 

@@ -35,24 +35,12 @@ namespace hago {
 
 /*! \brief Attribute for simulated quantize operator */
 struct SimulatedQuantizeAttrs : public tvm::AttrsNode<SimulatedQuantizeAttrs> {
-  double in_scale;
-  double out_scale;
-  int64_t clip_min;
-  int64_t clip_max;
   DataType in_dtype;
   DataType out_dtype;
   bool sign;
   std::string rounding;
 
   TVM_DECLARE_ATTRS(SimulatedQuantizeAttrs, "hago.SimulatedQuantizeAttrs") {
-    TVM_ATTR_FIELD(in_scale)
-      .describe("in scale");
-    TVM_ATTR_FIELD(out_scale)
-      .describe("out scale");
-    TVM_ATTR_FIELD(clip_min)
-      .describe("clip min");
-    TVM_ATTR_FIELD(clip_max)
-      .describe("clip max");
     TVM_ATTR_FIELD(in_dtype)
       .describe("in data type");
     TVM_ATTR_FIELD(out_dtype)
