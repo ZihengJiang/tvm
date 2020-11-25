@@ -70,6 +70,21 @@ except ValueError as e:
     ) = _get_itervar_feature_flatten = raise_error
 
 
+def get_itervar_feature_symbolic(sch, args, binds, take_log=False):
+    stmt = ana_lower(sch, args, simple_mode=True)
+    stmt = tvm.tir.stmt_functor.substitute(stmt, binds)
+    feas = _get_itervar_feature(stmt, take_log)
+
+    # convert tvm node to python type
+    ret = []
+    for row in feas:
+        tmp = []
+        tmp.append([row[0][0].value, row[0][1]])
+        for item in row[1:]:
+            tmp.append([item[0].value] + [x.value for x in item[1:]])
+        ret.append(tmp)
+    return ret
+
 def get_itervar_feature(sch, args, take_log=False):
     """get features of iter vars
 

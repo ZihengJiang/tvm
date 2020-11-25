@@ -125,6 +125,9 @@ class XGBoostCostModel(CostModel):
 
         if feature_type == "itervar":
             self.feature_extract_func = _extract_itervar_feature_index
+        elif feature_type == "symbolic":
+            self.feature_extract_func = _extract_itervar_feature_index
+            # self.feature_extract_func = _extract_symbolic_feature_index
         elif feature_type == "knob":
             self.feature_extract_func = _extract_knob_feature_index
         elif feature_type == "curve":
@@ -356,6 +359,8 @@ def _extract_itervar_feature_index(index):
         with _extract_target:
             sch, args = _extract_task.instantiate(config)
         fea = feature.get_itervar_feature_flatten(sch, args, take_log=True)
+        print(fea)
+        raise ValueError
         fea = np.concatenate((fea, list(config.get_other_option().values())))
         return fea
     except Exception:  # pylint: disable=broad-except

@@ -18,9 +18,12 @@
 """User facing API for specifying how to measure the generated code"""
 import multiprocessing
 from collections import namedtuple
+from dataclasses import dataclass, field
+from typing import Any
 
 
-class MeasureInput(namedtuple("MeasureInput", ["target", "task", "config"])):
+@dataclass
+class MeasureInput:
     """
     Stores all the necessary inputs for a measurement.
 
@@ -33,6 +36,10 @@ class MeasureInput(namedtuple("MeasureInput", ["target", "task", "config"])):
     config : ConfigEntity
         Specific configuration.
     """
+    target: Any
+    task: Any
+    config: Any
+    variant: list = field(default_factory=list)
 
 
 class MeasureResult(namedtuple("MeasureResult", ["costs", "error_no", "all_cost", "timestamp"])):

@@ -252,6 +252,8 @@ class ApplyHistoryBest(DispatchContext):
                     best_by_model[key] = (inp, res)
 
         logger.debug("Finish loading %d records", counter)
+        print(self.best_by_targetkey)
+        print(self.best_by_model)
 
     def _query_inside(self, target, workload):
         if target is None:

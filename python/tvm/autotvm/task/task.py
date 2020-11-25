@@ -126,10 +126,13 @@ class Task(object):
         Positional argument of func
     """
 
-    def __init__(self, name, args):
+    def __init__(self, name, args, shape_vars, shape_freq):
         self.name = name
         self.args = args
         self.kwargs = {}  # currently unused
+
+        self.shape_vars = shape_vars
+        self.shape_freq = shape_freq
 
         # init null config space
         self.config_space = None
@@ -418,7 +421,7 @@ def template(task_name, func=None):
     return _decorate
 
 
-def create(task_name, args, target, target_host=None):
+def create(task_name, args, target, target_host=None, shape_vars=None, shape_freq=None):
     """Create a tuning task and initialize its search space
 
     Parameters
@@ -438,7 +441,7 @@ def create(task_name, args, target, target_host=None):
         a task object
     """
     args = serialize_args(args)
-    ret = Task(task_name, args)
+    ret = Task(task_name, args, shape_vars, shape_freq)
 
     if isinstance(target, str):
         target = Target(target)
@@ -452,11 +455,13 @@ def create(task_name, args, target, target_host=None):
             sch, _ = ret.func(*args)
             ret.config_space.code_hash = getattr(sch, "code_hash", None)
 
-    ret.flop = -1
-    # ret.flop = ret.config_space.flop or compute_flop(sch)
+    if shape_vars is None:
+        ret.flop = ret.config_space.flop or compute_flop(sch)
+    else:
+        ret.flop = -1
+
     ret.target = target
     ret.target_host = target_host
-
     return ret
 
 

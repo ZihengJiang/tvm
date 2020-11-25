@@ -37,7 +37,7 @@ from . import task
 from .task import ConfigEntity, ApplyHistoryBest
 from .measure import MeasureInput, MeasureResult
 
-AUTOTVM_LOG_VERSION = 0.2
+AUTOTVM_LOG_VERSION = 0.3
 _old_version_warning = True
 logger = logging.getLogger("autotvm")
 
@@ -92,7 +92,7 @@ def encode(inp, result, protocol="json"):
 
     if protocol == "json":
         json_dict = {
-            "input": (str(inp.target), inp.task.name, inp.task.args, inp.task.kwargs),
+            "input": (str(inp.target), inp.task.name, inp.task.args, inp.task.kwargs, inp.variant),
             "config": inp.config.to_json_dict(),
             "result": (
                 result.costs if result.error_no == 0 else (1e9,),

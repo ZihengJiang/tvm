@@ -30,6 +30,7 @@ import time
 from random import getrandbits
 from collections import namedtuple
 import tempfile
+from dataclasses import astuple
 
 import numpy as np
 
@@ -297,6 +298,7 @@ class RPCRunner(Runner):
     def run(self, measure_inputs, build_results):
         results = []
         remote_args = (self.key, self.host, self.port, self.priority, self.timeout)
+        print(measure_inputs)
 
         for i in range(0, len(measure_inputs), self.n_parallel):
             futures = []
@@ -427,7 +429,10 @@ class LocalRunner(RPCRunner):
 
 def _build_func_common(measure_input, check_gpu=None, cuda_arch=None, build_option=None):
     """Common part for building a configuration"""
-    target, task, config = measure_input
+    print("---------------")
+    print("Build Func Common")
+    target, task, config, variant = astuple(measure_input)
+    print(variant)
     with target:
         s, args = task.instantiate(config)
 
@@ -454,8 +459,23 @@ def _build_func_common(measure_input, check_gpu=None, cuda_arch=None, build_opti
             with tvm.ir.transform.PassContext(config=opts):
                 func = build(s, args, target_host=task.target_host)
     # Error here
-    return func, None
-    return func, tuple((get_const_tuple(x.shape), x.dtype) for x in args)
+    arg_info = []
+    variant_map = {key: val for key, val in variant}
+    for x in args:
+        if isinstance(x, tvm.tir.expr.Var):
+            assert x.name in variant_map
+            arg_info.append(variant_map[x.name])
+        else:
+            shape = get_const_tuple(x.shape)
+            const_shape = []
+            for s in shape:
+                if isinstance(s, tvm.tir.expr.Var):
+                    assert s.name in variant_map 
+                    const_shape.append(variant_map[s.name])
+                else:
+                    const_shape.append(s)
+            arg_info.append((tuple(const_shape), x.dtype))
+    return func, tuple(arg_info)
 
 
 class _WrappedBuildFunc:
@@ -560,6 +580,8 @@ def run_through_rpc(
     if isinstance(build_result, MeasureResult):
         return build_result
 
+    print("---------------")
+    print("Run Through RPC")
     tic = time.time()
     errno = MeasureErrorNo.NO_ERROR
     try:
@@ -593,39 +615,31 @@ def run_through_rpc(
             min_repeat_ms=min_repeat_ms,
             f_preproc=f_prepare,
         )
-        if ref_input and isinstance(ref_input, list):
-            costs = 0
-            for inp in ref_input:
-                args = inp['scalar']
-                for x in inp['tensor']:
-                    args.append(nd.array(x, ctx=ctx))
-                ctx.sync()
-                res = time_f(*args).results
-                if len(res) > 2:  # remove largest and smallest value to reduce variance
-                    res = list(res)
-                    res.sort()
-                    res = tuple(res[1:-1])
-                freq = inp['freq']
-                costs += res[0] * freq
-            costs = (costs, )
-
+        print("Prepare the input")
+        # set input
+        if ref_input:
+            args = [nd.array(x, ctx=ctx) for x in ref_input]
         else:
-            # set input
-            if ref_input:
-                args = [nd.array(x, ctx=ctx) for x in ref_input]
-            else:
-                try:
-                    random_fill = remote.get_function("tvm.contrib.random.random_fill")
-                except AttributeError:
-                    raise AttributeError(
-                        "Please make sure USE_RANDOM is ON in the config.cmake " "on the remote devices"
-                    )
-                args = [nd.empty(x[0], dtype=x[1], ctx=ctx) for x in build_result.arg_info]
-                for arg in args:
+            try:
+                random_fill = remote.get_function("tvm.contrib.random.random_fill")
+            except AttributeError:
+                raise AttributeError(
+                    "Please make sure USE_RANDOM is ON in the config.cmake " "on the remote devices"
+                )
+            print(build_result.arg_info)
+            args = []
+            for x in build_result.arg_info:
+                if isinstance(x, tuple):
+                    arg = nd.empty(x[0], dtype=x[1], ctx=ctx)
                     random_fill(arg)
-                ctx.sync()
+                    args.append(arg)
+                elif isinstance(x, int):
+                    args.append(x)
+                else:
+                    raise ValueError("not support argument: {}".format(x))
+            ctx.sync()
 
-            costs = time_f(*args).results
+        costs = time_f(*args).results
 
         # clean up remote files
         remote.remove(build_result.filename)
