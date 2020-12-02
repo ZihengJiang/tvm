@@ -126,8 +126,7 @@ class XGBoostCostModel(CostModel):
         if feature_type == "itervar":
             self.feature_extract_func = _extract_itervar_feature_index
         elif feature_type == "symbolic":
-            self.feature_extract_func = _extract_itervar_feature_index
-            # self.feature_extract_func = _extract_symbolic_feature_index
+            self.feature_extract_func = _extract_symbolic_feature_index
         elif feature_type == "knob":
             self.feature_extract_func = _extract_knob_feature_index
         elif feature_type == "curve":
@@ -181,7 +180,10 @@ class XGBoostCostModel(CostModel):
         tic = time.time()
         self._reset_pool(self.space, self.target, self.task)
 
-        x_train = self._get_feature(xs)
+        inputs = []
+        for x in xs:
+            inputs.append((x.config.index, x.variant))
+        x_train = self._get_feature(inputs)
         y_train = np.array(ys)
         y_max = np.max(y_train)
         y_train = y_train / max(y_max, 1e-8)
@@ -294,7 +296,12 @@ class XGBoostCostModel(CostModel):
         return True
 
     def predict(self, xs, output_margin=False):
-        feas = self._get_feature(xs)
+        inputs = []
+        for index in xs:
+            for shape in self.task.shape_freq:
+                variant = [(var, size) for var, size in zip(self.task.shape_vars, shape)]
+                inputs.append((index, variant))
+        feas = self._get_feature(inputs)
         dtest = xgb.DMatrix(feas)
 
         if self.base_model:
@@ -302,7 +309,15 @@ class XGBoostCostModel(CostModel):
                 self._base_model_discount() * self.base_model.predict(xs, output_margin=True)
             )
 
-        return self.bst.predict(dtest, output_margin=output_margin)
+        predicted_cost = self.bst.predict(dtest, output_margin=output_margin)
+        weighted_sum_cost = []
+        num_shapes = len(self.task.shape_freq)
+        for i in range(len(xs)):
+            cost = 0
+            for j, (shape, freq) in enumerate(self.task.shape_freq.items()):
+                cost += predicted_cost[i * num_shapes + j] * freq
+            weighted_sum_cost += cost
+        return - np.array(weighted_sum_cost)
 
     def load_basemodel(self, base_model):
         self.base_model = base_model
@@ -314,32 +329,19 @@ class XGBoostCostModel(CostModel):
             self.task, self.fea_type, self.loss_type, self.num_threads, self.log_interval, self
         )
 
-    def _get_feature(self, indexes):
+    def _get_feature(self, inputs):
         """get features for indexes, run extraction if we do not have cache for them"""
         # free feature cache
-        if self.feature_cache.size(self.fea_type) >= 100000:
-            self.feature_cache.clear(self.fea_type)
+        pool = self._get_pool()
+        feas = pool.map(self.feature_extract_func, inputs)
+        # for i, fea in zip(need_extract, feas):
+        #     fea_cache[i] = fea
 
-        fea_cache = self.feature_cache.get(self.fea_type)
-
+        feature_len = feas[0].shape[-1]
+        indexes = [inp[0] for inp in inputs]
         indexes = np.array(indexes)
-        need_extract = [x for x in indexes if x not in fea_cache]
-
-        if need_extract:
-            pool = self._get_pool()
-            feas = pool.map(self.feature_extract_func, need_extract)
-            for i, fea in zip(need_extract, feas):
-                fea_cache[i] = fea
-
-        feature_len = None
-        for idx in indexes:
-            if fea_cache[idx] is not None:
-                feature_len = fea_cache[idx].shape[-1]
-                break
-
         ret = np.empty((len(indexes), feature_len), dtype=np.float32)
-        for i, ii in enumerate(indexes):
-            t = fea_cache[ii]
+        for i, (ii, t) in enumerate(zip(indexes, feas)):
             ret[i, :] = t if t is not None else 0
         return ret
 
@@ -350,6 +352,27 @@ class XGBoostCostModel(CostModel):
 _extract_space = None
 _extract_target = None
 _extract_task = None
+
+
+def _extract_symbolic_feature_index(inp):
+    # try:
+    index, variant = inp
+    config = _extract_space.get(index)
+    with _extract_target:
+        sch, args = _extract_task.instantiate(config)
+    sym_M, sym_N = args[0], args[1]
+    M = variant[0][1]
+    N = variant[1][1]
+    binds = {
+        sym_M: M,
+        sym_N: N,
+    }
+    fea = feature.get_itervar_feature_symbolic(sch, args, binds, take_log=True)
+    fea = feature.flatten_itervar_feature(fea)
+    fea = np.concatenate((fea, list(config.get_other_option().values())))
+    return fea
+    # except Exception:  # pylint: disable=broad-except
+    #     return None
 
 
 def _extract_itervar_feature_index(index):

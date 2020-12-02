@@ -158,14 +158,15 @@ class DynamicXGBTuner(DynamicModelBasedTuner):
     def __init__(
         self,
         task,
-        plan_size=10,
+        plan_size=64,
         feature_type="symbolic",
         loss_type="rank",
         num_threads=None,
         optimizer="sa",
         diversity_filter_ratio=None,
-        log_interval=10,
+        log_interval=50,
     ):
+        print("Init XGBoost Tuner")
         cost_model = XGBoostCostModel(
             task,
             feature_type=feature_type,
@@ -185,6 +186,7 @@ class DynamicXGBTuner(DynamicModelBasedTuner):
         )
 
     def tune(self, *args, **kwargs):  # pylint: disable=arguments-differ
+        print("Tuner XGBoost Tuner")
         super(DynamicXGBTuner, self).tune(*args, **kwargs)
 
         # manually close pool to avoid multiprocessing issues

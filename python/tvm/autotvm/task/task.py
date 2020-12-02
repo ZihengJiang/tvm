@@ -126,7 +126,7 @@ class Task(object):
         Positional argument of func
     """
 
-    def __init__(self, name, args, shape_vars, shape_freq):
+    def __init__(self, name, args, shape_vars=None, shape_freq=None):
         self.name = name
         self.args = args
         self.kwargs = {}  # currently unused

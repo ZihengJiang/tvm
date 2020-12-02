@@ -391,19 +391,21 @@ class DynamicModelBasedTuner(DynamicTuner):
         return ret
 
     def update(self, inputs, results):
+        print("tuner update")
         for inp, res in zip(inputs, results):
             index = inp.config.index
             if res.error_no == 0:
-                self.xs.append(index)
-                flops = inp.task.flop / np.mean(res.costs)
+                self.xs.append(inp)
+                cost = np.mean(res.costs) * 1000
+                flops = inp.task.flop / cost
                 self.flops_max = max(self.flops_max, flops)
-                self.ys.append(flops)
+                self.ys.append(cost)
             else:
-                self.xs.append(index)
+                self.xs.append(inp)
                 self.ys.append(0.0)
 
         # if we have enough new training samples
-        if len(self.xs) >= self.plan_size * (self.train_ct + 1) and self.flops_max > 1e-6:
+        if len(self.xs) >= self.plan_size * (self.train_ct + 1):
             self.cost_model.fit(self.xs, self.ys, self.plan_size)
             if self.diversity_filter_ratio:
                 candidate = self.model_optimizer.find_maximums(

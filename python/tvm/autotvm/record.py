@@ -149,7 +149,7 @@ def decode(row, protocol="json"):
                 _old_version_warning = False
             return None
 
-        tgt, task_name, task_args, task_kwargs = row["input"]
+        tgt, task_name, task_args, task_kwargs, variant = row["input"]
         tgt = str(tgt)
         if "-target" in tgt:
             logger.warning('"-target" is deprecated, use "-mtriple" instead.')
@@ -170,7 +170,7 @@ def decode(row, protocol="json"):
 
         tsk = task.Task(clean_json_to_python(task_name), clean_json_to_python(task_args))
         config = ConfigEntity.from_json_dict(row["config"])
-        inp = MeasureInput(tgt, tsk, config)
+        inp = MeasureInput(tgt, tsk, config, variant)
         result = MeasureResult(*[tuple(x) if isinstance(x, list) else x for x in row["result"]])
         config.cost = np.mean(result.costs)
 
