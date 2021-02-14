@@ -126,6 +126,36 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
   return mptr;
 }
 
+void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape,
+                                      DLDataType type_hint, String mem_scope) {
+  this->Init();
+  ICHECK(context != nullptr) << "No OpenCL device";
+
+  // check shape
+
+  // prepare descriptors
+  cl_image_format image_format;
+  image_format.image_channel_data_type = CL_FLOAT;
+  image_format.image_channel_order = CL_R;
+  cl_image_desc image_desc;
+  image_desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+  image_desc.image_width = shape[0];
+  image_desc.image_height = shape[1];
+  image_desc.image_depth = 1;
+  image_desc.image_array_size = 1;
+  image_desc.image_row_pitch = 0;
+  image_desc.image_slice_pitch = 0;
+  image_desc.num_mip_levels = 0;
+  image_desc.num_samples = 0;
+  image_desc.buffer= NULL;
+
+  cl_int err_code;
+  cl_mem mptr = clCreateImage(this->context, CL_MEM_READ_WRITE, &image_format, &image_desc,
+   														nullptr, &err_code);
+  OPENCL_CHECK_ERROR(err_code);
+  return mptr;
+}
+
 void OpenCLWorkspace::FreeDataSpace(TVMContext ctx, void* ptr) {
   // We have to make sure that the memory object is not in the command queue
   // for some OpenCL platforms.
@@ -134,6 +164,26 @@ void OpenCLWorkspace::FreeDataSpace(TVMContext ctx, void* ptr) {
   cl_mem mptr = static_cast<cl_mem>(ptr);
   OPENCL_CALL(clReleaseMemObject(mptr));
 }
+
+cl_mem_object_type GetMemObjectInfo(const void* mem_ptr) {
+  cl_mem mem = static_cast<cl_mem>((void*)mem_ptr);
+  cl_mem_info param_name = CL_MEM_TYPE;
+  cl_mem_object_type mem_type;
+  OPENCL_CALL(clGetMemObjectInfo(mem, param_name, sizeof(mem_type), &mem_type, NULL));
+  return mem_type;
+}
+
+std::tuple<size_t, size_t> GetImageInfo(const void* mem_ptr, size_t* origin, size_t* region) {
+  cl_mem mem = static_cast<cl_mem>((void*)mem_ptr);
+  size_t width, height; 
+  OPENCL_CALL(clGetImageInfo(mem, CL_IMAGE_WIDTH, sizeof(width), &width, NULL));
+  OPENCL_CALL(clGetImageInfo(mem, CL_IMAGE_HEIGHT, sizeof(height), &height, NULL));
+  region[0] = width;
+  region[1] = height;
+  region[2] = 1;
+  return std::make_tuple(0 , 0); 
+}
+    
 
 void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void* to,
                                      size_t to_offset, size_t size, TVMContext ctx_from,
@@ -147,11 +197,36 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
                                     static_cast<cl_mem>(to), from_offset, to_offset, size, 0,
                                     nullptr, nullptr));
   } else if (IsOpenCLDevice(ctx_from) && ctx_to.device_type == kDLCPU) {
-    OPENCL_CALL(clEnqueueReadBuffer(this->GetQueue(ctx_from),
-                                    static_cast<cl_mem>((void*)from),  // NOLINT(*)
-                                    CL_FALSE, from_offset, size, static_cast<char*>(to) + to_offset,
-                                    0, nullptr, nullptr));
-    OPENCL_CALL(clFinish(this->GetQueue(ctx_from)));
+    cl_mem_object_type from_type = GetMemObjectInfo(from);
+    switch (from_type) {
+      case CL_MEM_OBJECT_BUFFER:
+        LOG(INFO) << "Buffer";
+        OPENCL_CALL(clEnqueueReadBuffer(this->GetQueue(ctx_from),
+                                        static_cast<cl_mem>((void*)from),  // NOLINT(*)
+                                        CL_FALSE, from_offset, size, static_cast<char*>(to) + to_offset,
+                                        0, nullptr, nullptr));
+        OPENCL_CALL(clFinish(this->GetQueue(ctx_from)));
+        break;
+      case CL_MEM_OBJECT_IMAGE2D: {
+        LOG(INFO) << "Image2D";
+        size_t origin[3] = {0, 0, 0};
+        size_t region[3];
+        size_t row_pitch, slice_pitch;
+        std::tie(row_pitch, slice_pitch) = GetImageInfo(from, origin, region);
+        LOG(INFO) << "region[0] = " << region[0];
+        LOG(INFO) << "region[1] = " << region[1];
+        OPENCL_CALL(clEnqueueReadImage(this->GetQueue(ctx_from),
+                                       static_cast<cl_mem>((void*)from),  // NOLINT(*)
+                                       CL_FALSE, origin, region, row_pitch, slice_pitch, 
+                                       static_cast<char*>(to) + to_offset,
+                                       0, nullptr, nullptr));
+        OPENCL_CALL(clFinish(this->GetQueue(ctx_from)));
+        break;
+      }
+      default:
+        LOG(FATAL) << "Not supported yet.";
+    }
+
   } else if (ctx_from.device_type == kDLCPU && IsOpenCLDevice(ctx_to)) {
     OPENCL_CALL(clEnqueueWriteBuffer(this->GetQueue(ctx_to), static_cast<cl_mem>(to), CL_FALSE,
                                      to_offset, size, static_cast<const char*>(from) + from_offset,

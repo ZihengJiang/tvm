@@ -90,6 +90,9 @@ class TVM_DLL DeviceAPI {
    */
   virtual void* AllocDataSpace(TVMContext ctx, size_t nbytes, size_t alignment,
                                DLDataType type_hint) = 0;
+
+  virtual void* AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape, 
+                               DLDataType type_hint, String mem_scope);
   /*!
    * \brief Free a data space on device.
    * \param ctx The device context to perform operation.

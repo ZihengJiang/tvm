@@ -28,6 +28,7 @@
 #include <tvm/runtime/data_type.h>
 #include <tvm/runtime/object.h>
 #include <tvm/runtime/serializer.h>
+#include <tvm/runtime/container.h>
 
 #include <atomic>
 #include <utility>
@@ -136,7 +137,8 @@ class NDArray : public ObjectRef {
    * \param ctx The context of the Array.
    * \return The created Array
    */
-  TVM_DLL static NDArray Empty(std::vector<int64_t> shape, DLDataType dtype, DLContext ctx);
+  TVM_DLL static NDArray Empty(std::vector<int64_t> shape, DLDataType dtype,
+                               DLContext ctx, Optional<String> mem_scope=NullOpt);
   /*!
    * \brief Create a NDArray backed by a dlpack tensor.
    *

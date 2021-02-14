@@ -25,6 +25,7 @@
 #include <tvm/runtime/device_api.h>
 #include <tvm/runtime/ndarray.h>
 #include <tvm/support/logging.h>
+#include <tvm/runtime/registry.h>
 
 #include "runtime_base.h"
 
@@ -186,13 +187,20 @@ NDArray NDArray::CreateView(std::vector<int64_t> shape, DLDataType dtype) {
 
 DLManagedTensor* NDArray::ToDLPack() const { return Internal::ToDLPack(get_mutable()); }
 
-NDArray NDArray::Empty(std::vector<int64_t> shape, DLDataType dtype, DLContext ctx) {
+NDArray NDArray::Empty(std::vector<int64_t> shape, DLDataType dtype,
+                       DLContext ctx, Optional<String> mem_scope) {
   NDArray ret = Internal::Create(shape, dtype, ctx);
   // setup memory content
   size_t size = GetDataSize(ret.get_mutable()->dl_tensor);
   size_t alignment = GetDataAlignment(ret.get_mutable()->dl_tensor);
-  ret.get_mutable()->dl_tensor.data =
-      DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, size, alignment, ret->dtype);
+  if (mem_scope) {
+    ret.get_mutable()->dl_tensor.data =
+        DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, shape, ret->dtype, mem_scope.value());
+  } else {
+    ret.get_mutable()->dl_tensor.data =
+        DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, size, alignment, ret->dtype);
+  }
+  LOG(INFO) << "NDArray::Empty exit";
   return ret;
 }
 
@@ -278,6 +286,22 @@ int TVMArrayAlloc(const tvm_index_t* shape, int ndim, int dtype_code, int dtype_
   *out = NDArray::Internal::MoveToFFIHandle(ndarray);
   API_END();
 }
+
+TVM_REGISTER_GLOBAL("runtime.TVMArrayAllocWithScope").set_body([](TVMArgs args, TVMRetValue* ret) {
+  int64_t* shape_ptr = static_cast<int64_t*>(static_cast<void*>(args[0]));
+  int ndim = args[1];
+  std::vector<int64_t> shape(shape_ptr, shape_ptr + ndim);
+  DataType dtype = args[2];
+  TVMContext ctx = args[3];
+  String mem_scope = args[4];
+  // LOG(INFO) << "shape: " << shape[0] << ", " << shape[1];
+  // LOG(INFO) << "ndim: " << ndim;
+  // LOG(INFO) << "dtype: " << dtype;
+  // LOG(INFO) << "ctx: " << ctx;
+  // LOG(INFO) << "mem_scope: " << mem_scope;
+  auto ndarray = NDArray::Empty(shape, dtype, ctx, mem_scope);
+  *ret = ndarray;
+});
 
 int TVMArrayFree(TVMArrayHandle handle) {
   API_BEGIN();

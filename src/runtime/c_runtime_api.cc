@@ -144,6 +144,13 @@ void* DeviceAPI::AllocWorkspace(TVMContext ctx, size_t size, DLDataType type_hin
   return AllocDataSpace(ctx, size, kTempAllocaAlignment, type_hint);
 }
 
+void* DeviceAPI::AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape, 
+                                DLDataType type_hint, String mem_scope) {
+  LOG(FATAL) << "Device does not support allocate data space with "
+    << "specified memory scope.";
+  return nullptr;
+}
+
 void DeviceAPI::FreeWorkspace(TVMContext ctx, void* ptr) { FreeDataSpace(ctx, ptr); }
 
 TVMStreamHandle DeviceAPI::CreateStream(TVMContext ctx) {
@@ -159,6 +166,7 @@ void DeviceAPI::SyncStreamFromTo(TVMContext ctx, TVMStreamHandle event_src,
                                  TVMStreamHandle event_dst) {
   LOG(FATAL) << "Device does not support stream api.";
 }
+
 
 //--------------------------------------------------------
 // Error handling mechanism
