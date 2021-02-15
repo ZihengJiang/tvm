@@ -144,10 +144,36 @@ void* DeviceAPI::AllocWorkspace(TVMContext ctx, size_t size, DLDataType type_hin
   return AllocDataSpace(ctx, size, kTempAllocaAlignment, type_hint);
 }
 
+inline static size_t GetDataSize(std::vector<int64_t> shape, DLDataType dtype) {
+  size_t size = 1;
+  for (size_t i = 0; i < shape.size(); ++i) {
+    size *= static_cast<size_t>(shape[i]);
+  }
+  size *= (dtype.bits * dtype.lanes + 7) / 8;
+  return size;
+}
+
+inline static size_t GetDataAlignment(DLDataType dtype) {
+  size_t align = (dtype.bits / 8) * dtype.lanes;
+  if (align < kAllocAlignment) return kAllocAlignment;
+  return align;
+}
+
 void* DeviceAPI::AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape, 
-                                DLDataType type_hint, String mem_scope) {
+                                DLDataType dtype, Optional<String> mem_scope) {
+  if (mem_scope == nullptr || mem_scope.value() == "global") {
+    // setup memory content
+    size_t size = GetDataSize(shape, dtype);
+    size_t alignment = GetDataAlignment(dtype);
+    return AllocDataSpace(ctx, size, alignment, dtype);
+  }
+  return AllocDataSpaceWithScope(ctx, shape, dtype, mem_scope.value());
+}
+
+void* DeviceAPI::AllocDataSpaceWithScope(TVMContext ctx, std::vector<int64_t> shape, 
+                                         DLDataType dtype, String mem_scope) {
   LOG(FATAL) << "Device does not support allocate data space with "
-    << "specified memory scope.";
+    << "specified memory scope: " << mem_scope;
   return nullptr;
 }
 

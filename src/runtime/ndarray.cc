@@ -190,16 +190,8 @@ DLManagedTensor* NDArray::ToDLPack() const { return Internal::ToDLPack(get_mutab
 NDArray NDArray::Empty(std::vector<int64_t> shape, DLDataType dtype,
                        DLContext ctx, Optional<String> mem_scope) {
   NDArray ret = Internal::Create(shape, dtype, ctx);
-  // setup memory content
-  size_t size = GetDataSize(ret.get_mutable()->dl_tensor);
-  size_t alignment = GetDataAlignment(ret.get_mutable()->dl_tensor);
-  if (mem_scope) {
-    ret.get_mutable()->dl_tensor.data =
-        DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, shape, ret->dtype, mem_scope.value());
-  } else {
-    ret.get_mutable()->dl_tensor.data =
-        DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, size, alignment, ret->dtype);
-  }
+  ret.get_mutable()->dl_tensor.data =
+      DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, shape, ret->dtype, mem_scope);
   LOG(INFO) << "NDArray::Empty exit";
   return ret;
 }

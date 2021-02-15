@@ -254,8 +254,8 @@ class OpenCLWorkspace : public DeviceAPI {
   void SetDevice(TVMContext ctx) final;
   void GetAttr(TVMContext ctx, DeviceAttrKind kind, TVMRetValue* rv) final;
   void* AllocDataSpace(TVMContext ctx, size_t size, size_t alignment, DLDataType type_hint) final;
-  void* AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape,
-                       DLDataType type_hint, String mem_scope) final;
+  void* AllocDataSpaceWithScope(TVMContext ctx, std::vector<int64_t> shape,
+                                DLDataType dtype, String mem_scope) final;
   void FreeDataSpace(TVMContext ctx, void* ptr) final;
   void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset, size_t size,
                       TVMContext ctx_from, TVMContext ctx_to, DLDataType type_hint,

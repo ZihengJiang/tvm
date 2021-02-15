@@ -139,8 +139,8 @@ static inline std::tuple<int64_t, int64_t> FlatShapeTo2D(std::vector<int64_t> sh
   return std::make_tuple(width, height);
 }
 
-void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape,
-                                      DLDataType dtype, String mem_scope) {
+void* OpenCLWorkspace::AllocDataSpaceWithScope(TVMContext ctx, std::vector<int64_t> shape,
+                                               DLDataType dtype, String mem_scope) {
   this->Init();
   ICHECK(context != nullptr) << "No OpenCL device";
 

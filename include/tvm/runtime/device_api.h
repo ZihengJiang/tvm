@@ -88,11 +88,14 @@ class TVM_DLL DeviceAPI {
    * as OpenGL, as nbytes & alignment are sufficient for most backends.
    * \return The allocated device pointer.
    */
+  void* AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape, 
+                       DLDataType dtype, Optional<String> mem_scope=NullOpt);
+
+  // TODO(ziheng): rename to `AllocDataSpaceWithNByte`, move it to protected and remove type_hint argument.
   virtual void* AllocDataSpace(TVMContext ctx, size_t nbytes, size_t alignment,
                                DLDataType type_hint) = 0;
 
-  virtual void* AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape, 
-                               DLDataType dtype, String mem_scope);
+
   /*!
    * \brief Free a data space on device.
    * \param ctx The device context to perform operation.
@@ -201,6 +204,12 @@ class TVM_DLL DeviceAPI {
   static bool NeedSetDeviceContext(int device_type) {
     return device_type != kDLCPU && device_type != kDLMicroDev;
   }
+
+ protected:
+  // virtual void* AllocDataSpaceWithNBytes(TVMContext ctx, size_t nbytes, size_t alignment) = 0
+  virtual void* AllocDataSpaceWithScope(TVMContext ctx, std::vector<int64_t> shape, 
+                                        DLDataType dtype, String mem_scope);
+
 };
 
 /*! \brief The device type bigger than this is RPC device */
