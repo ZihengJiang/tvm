@@ -92,7 +92,7 @@ class TVM_DLL DeviceAPI {
                                DLDataType type_hint) = 0;
 
   virtual void* AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape, 
-                               DLDataType type_hint, String mem_scope);
+                               DLDataType dtype, String mem_scope);
   /*!
    * \brief Free a data space on device.
    * \param ctx The device context to perform operation.
@@ -115,6 +115,10 @@ class TVM_DLL DeviceAPI {
   virtual void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset,
                               size_t num_bytes, TVMContext ctx_from, TVMContext ctx_to,
                               DLDataType type_hint, TVMStreamHandle stream) = 0;
+
+  // virtual void CopyDataFromTo(const DLTensor* from, DLTensor* to, 
+  //                             TVMContext ctx_from, TVMContext ctx_to,
+  //                             TVMStreamHandle stream) = 0;
   /*!
    * \brief Create a new stream of execution.
    *

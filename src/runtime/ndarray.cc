@@ -293,12 +293,12 @@ TVM_REGISTER_GLOBAL("runtime.TVMArrayAllocWithScope").set_body([](TVMArgs args, 
   std::vector<int64_t> shape(shape_ptr, shape_ptr + ndim);
   DataType dtype = args[2];
   TVMContext ctx = args[3];
-  String mem_scope = args[4];
+  Optional<String> mem_scope = args[4];
   // LOG(INFO) << "shape: " << shape[0] << ", " << shape[1];
   // LOG(INFO) << "ndim: " << ndim;
   // LOG(INFO) << "dtype: " << dtype;
   // LOG(INFO) << "ctx: " << ctx;
-  // LOG(INFO) << "mem_scope: " << mem_scope;
+  // LOG(INFO) << "mem_scope: " << mem_scope.value();
   auto ndarray = NDArray::Empty(shape, dtype, ctx, mem_scope);
   *ret = ndarray;
 });

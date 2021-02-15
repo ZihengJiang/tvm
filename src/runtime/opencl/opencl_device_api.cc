@@ -126,29 +126,51 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
   return mptr;
 }
 
+static inline std::tuple<int64_t, int64_t> FlatShapeTo2D(std::vector<int64_t> shape) {
+  ICHECK(shape.size() >= 1 && shape.back() == 4);
+  while (shape.size() < 3) {
+    shape.insert(shape.end() - 1, 1);
+  }
+  int64_t width = 1;
+  for (auto it = shape.begin(); it < shape.end() - 2; ++it) {
+    width *= *it;
+  }
+  int64_t height = *(shape.end() - 2);
+  return std::make_tuple(width, height);
+}
+
 void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape,
-                                      DLDataType type_hint, String mem_scope) {
+                                      DLDataType dtype, String mem_scope) {
   this->Init();
   ICHECK(context != nullptr) << "No OpenCL device";
 
-  // check shape
-
-  // prepare descriptors
   cl_image_format image_format;
-  image_format.image_channel_data_type = CL_FLOAT;
-  image_format.image_channel_order = CL_R;
+  image_format.image_channel_data_type = DTypeToOpenCLChannelType(dtype);
   cl_image_desc image_desc;
-  image_desc.image_type = CL_MEM_OBJECT_IMAGE2D;
-  image_desc.image_width = shape[0];
-  image_desc.image_height = shape[1];
-  image_desc.image_depth = 1;
-  image_desc.image_array_size = 1;
-  image_desc.image_row_pitch = 0;
-  image_desc.image_slice_pitch = 0;
-  image_desc.num_mip_levels = 0;
-  image_desc.num_samples = 0;
-  image_desc.buffer= NULL;
-
+  if (mem_scope == "global:texture-act") {
+    // shape must be (?, ..., ?, 4)
+    ICHECK_GT(shape.size(), 1);
+    ICHECK_EQ(shape.back(), 4);
+    // prepare descriptors
+    image_format.image_channel_order = CL_RGBA;
+    image_desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+    // flat the tensor shape to 2D image
+    size_t width, height; 
+    std::tie(width, height) = FlatShapeTo2D(shape);
+    // LOG(INFO) << "width = " << width;
+    // LOG(INFO) << "height = " << height;
+    image_desc.image_width = width;
+    image_desc.image_height = height;
+    image_desc.image_depth = 1;
+    image_desc.image_array_size = 1;
+    image_desc.image_row_pitch = 0;
+    image_desc.image_slice_pitch = 0;
+    image_desc.num_mip_levels = 0;
+    image_desc.num_samples = 0;
+    image_desc.buffer= NULL;
+  } else {
+    LOG(FATAL) << "not support yet.";
+  }
   cl_int err_code;
   cl_mem mptr = clCreateImage(this->context, CL_MEM_READ_WRITE, &image_format, &image_desc,
    														nullptr, &err_code);
@@ -165,15 +187,7 @@ void OpenCLWorkspace::FreeDataSpace(TVMContext ctx, void* ptr) {
   OPENCL_CALL(clReleaseMemObject(mptr));
 }
 
-cl_mem_object_type GetMemObjectInfo(const void* mem_ptr) {
-  cl_mem mem = static_cast<cl_mem>((void*)mem_ptr);
-  cl_mem_info param_name = CL_MEM_TYPE;
-  cl_mem_object_type mem_type;
-  OPENCL_CALL(clGetMemObjectInfo(mem, param_name, sizeof(mem_type), &mem_type, NULL));
-  return mem_type;
-}
-
-std::tuple<size_t, size_t> GetImageInfo(const void* mem_ptr, size_t* origin, size_t* region) {
+static void GetImageShape(const void* mem_ptr, size_t* region) {
   cl_mem mem = static_cast<cl_mem>((void*)mem_ptr);
   size_t width, height; 
   OPENCL_CALL(clGetImageInfo(mem, CL_IMAGE_WIDTH, sizeof(width), &width, NULL));
@@ -181,9 +195,8 @@ std::tuple<size_t, size_t> GetImageInfo(const void* mem_ptr, size_t* origin, siz
   region[0] = width;
   region[1] = height;
   region[2] = 1;
-  return std::make_tuple(0 , 0); 
+  return;
 }
-    
 
 void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void* to,
                                      size_t to_offset, size_t size, TVMContext ctx_from,
@@ -197,7 +210,7 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
                                     static_cast<cl_mem>(to), from_offset, to_offset, size, 0,
                                     nullptr, nullptr));
   } else if (IsOpenCLDevice(ctx_from) && ctx_to.device_type == kDLCPU) {
-    cl_mem_object_type from_type = GetMemObjectInfo(from);
+    cl_mem_object_type from_type = GetMemObjectType(from);
     switch (from_type) {
       case CL_MEM_OBJECT_BUFFER:
         LOG(INFO) << "Buffer";
@@ -211,20 +224,20 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
         LOG(INFO) << "Image2D";
         size_t origin[3] = {0, 0, 0};
         size_t region[3];
-        size_t row_pitch, slice_pitch;
-        std::tie(row_pitch, slice_pitch) = GetImageInfo(from, origin, region);
-        LOG(INFO) << "region[0] = " << region[0];
-        LOG(INFO) << "region[1] = " << region[1];
+        GetImageShape(from, region);
+        // LOG(INFO) << "region[0] = " << region[0];
+        // LOG(INFO) << "region[1] = " << region[1];
+        // LOG(INFO) << "region[2] = " << region[2];
         OPENCL_CALL(clEnqueueReadImage(this->GetQueue(ctx_from),
                                        static_cast<cl_mem>((void*)from),  // NOLINT(*)
-                                       CL_FALSE, origin, region, row_pitch, slice_pitch, 
+                                       CL_FALSE, origin, region, 0, 0, 
                                        static_cast<char*>(to) + to_offset,
                                        0, nullptr, nullptr));
         OPENCL_CALL(clFinish(this->GetQueue(ctx_from)));
         break;
       }
       default:
-        LOG(FATAL) << "Not supported yet.";
+        LOG(FATAL) << "OpenCL memory type is wrong.";
     }
 
   } else if (ctx_from.device_type == kDLCPU && IsOpenCLDevice(ctx_to)) {

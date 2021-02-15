@@ -273,31 +273,12 @@ def empty(shape, dtype="float32", ctx=context(1, 0), mem_scope=None):
     arr : tvm.nd.NDArray
         The array tvm supported.
     """
-    if mem_scope is None:
-        shape = c_array(tvm_shape_index_t, shape)
-        ndim = ctypes.c_int(len(shape))
-        handle = TVMArrayHandle()
-        dtype = DataType(dtype)
-        check_call(
-            _LIB.TVMArrayAlloc(
-                shape,
-                ndim,
-                ctypes.c_int(dtype.type_code),
-                ctypes.c_int(dtype.bits),
-                ctypes.c_int(dtype.lanes),
-                ctx.device_type,
-                ctx.device_id,
-                ctypes.byref(handle),
-            )
-        )
-        return _make_array(handle, False, False)
-    else:
-        arr = np.array(shape, 'int64')
-        ptr = arr.ctypes.data_as(ctypes.POINTER(ctypes.c_int64))
-        shape_ptr =  ctypes.cast(ptr, ctypes.c_void_p)
-        ndim = len(shape)
-        arr = _ffi_api.TVMArrayAllocWithScope(shape_ptr, ndim, dtype, ctx, mem_scope)
-        return arr
+    arr = np.array(shape, 'int64')
+    ptr = arr.ctypes.data_as(ctypes.POINTER(ctypes.c_int64))
+    shape_ptr =  ctypes.cast(ptr, ctypes.c_void_p)
+    ndim = len(shape)
+    arr = _ffi_api.TVMArrayAllocWithScope(shape_ptr, ndim, dtype, ctx, mem_scope)
+    return arr
 
 
 def from_dlpack(dltensor):
