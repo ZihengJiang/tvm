@@ -135,9 +135,7 @@ class RPCSession {
    * \param remote_ctx_to The target context.
    * \param type_hint Hint of content data type.
    */
-  virtual void CopyToRemote(void* local_from, size_t local_from_offset, void* remote_to,
-                            size_t remote_to_offset, size_t nbytes, TVMContext remote_ctx_to,
-                            DLDataType type_hint) = 0;
+  virtual void CopyToRemote(DLTensor* local_from, DLTensor* remote_to) = 0;
   /*!
    * \brief Copy bytes from remote array content.
    * \param remote_from The source host data.
@@ -148,9 +146,7 @@ class RPCSession {
    * \param remote_ctx_from The source context in the remote.
    * \param type_hint Hint of content data type.
    */
-  virtual void CopyFromRemote(void* remote_from, size_t remote_from_offset, void* local_to,
-                              size_t local_to_offset, size_t nbytes, TVMContext remote_ctx_from,
-                              DLDataType type_hint) = 0;
+  virtual void CopyFromRemote(DLTensor* remote_from, DLTensor* local_to) = 0;
 
   /*!
    * \brief Free a remote function.
@@ -235,9 +231,8 @@ class RPCSession {
    * \note All the allocated memory in local_from, and remote_to
    *       must stay alive until on_compelete is called.
    */
-  virtual void AsyncCopyToRemote(void* local_from, size_t local_from_offset, void* remote_to,
-                                 size_t remote_to_offset, size_t nbytes, TVMContext remote_ctx_to,
-                                 DLDataType type_hint, FAsyncCallback on_complete);
+  virtual void AsyncCopyToRemote(DLTensor* local_from, DLTensor* remote_to,
+                                 FAsyncCallback on_complete);
 
   /*!
    * \brief Asynchrous version of CopyFromRemote.
@@ -254,9 +249,7 @@ class RPCSession {
    * \note All the allocated memory in remote_from, and local_to
    *       must stay alive until on_compelete is called.
    */
-  virtual void AsyncCopyFromRemote(void* remote_from, size_t remote_from_offset, void* local_to,
-                                   size_t local_to_offset, size_t nbytes,
-                                   TVMContext remote_ctx_from, DLDataType type_hint,
+  virtual void AsyncCopyFromRemote(DLTensor* remote_from, DLTensor* local_to,
                                    FAsyncCallback on_complete);
   /*!
    * \brief Asynchrously wait for all events in ctx, stream compeletes.

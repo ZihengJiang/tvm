@@ -58,6 +58,12 @@ constexpr int kTempAllocaAlignment = 128;
 /*! \brief Maximum size that can be allocated on stack */
 constexpr int kMaxStackAlloca = 1024;
 
+inline size_t GetDataAlignment(const DLTensor& arr) {
+  size_t align = (arr.dtype.bits / 8) * arr.dtype.lanes;
+  if (align < kAllocAlignment) return kAllocAlignment;
+  return align;
+}
+
 /*!
  *  \brief TVM Runtime Device API, abstracts the device
  *  specific interface for memory management.
@@ -115,13 +121,7 @@ class TVM_DLL DeviceAPI {
    *                  can be useful for cross device endian converison.
    * \param stream Optional stream object.
    */
-  virtual void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset,
-                              size_t num_bytes, TVMContext ctx_from, TVMContext ctx_to,
-                              DLDataType type_hint, TVMStreamHandle stream) = 0;
-
-  // virtual void CopyDataFromTo(const DLTensor* from, DLTensor* to, 
-  //                             TVMContext ctx_from, TVMContext ctx_to,
-  //                             TVMStreamHandle stream) = 0;
+  virtual void CopyDataFromTo(DLTensor* from, DLTensor* to, TVMStreamHandle stream);
   /*!
    * \brief Create a new stream of execution.
    *
@@ -206,6 +206,10 @@ class TVM_DLL DeviceAPI {
   }
 
  protected:
+  virtual void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset,
+                              size_t num_bytes, TVMContext ctx_from, TVMContext ctx_to,
+                              DLDataType type_hint, TVMStreamHandle stream);
+
   // virtual void* AllocDataSpaceWithNBytes(TVMContext ctx, size_t nbytes, size_t alignment) = 0
   virtual void* AllocDataSpaceWithScope(TVMContext ctx, std::vector<int64_t> shape, 
                                         DLDataType dtype, String mem_scope);

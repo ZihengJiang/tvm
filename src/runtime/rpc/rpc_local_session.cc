@@ -87,26 +87,17 @@ void LocalSession::CallFunc(RPCSession::PackedFuncHandle func, const TVMValue* a
   this->EncodeReturn(std::move(rv), encode_return);
 }
 
-void LocalSession::CopyToRemote(void* from, size_t from_offset, void* to, size_t to_offset,
-                                size_t nbytes, TVMContext ctx_to, DLDataType type_hint) {
-  TVMContext cpu_ctx;
-  cpu_ctx.device_type = kDLCPU;
-  cpu_ctx.device_id = 0;
-  this->GetDeviceAPI(ctx_to)->CopyDataFromTo(from, from_offset, to, to_offset, nbytes, cpu_ctx,
-                                             ctx_to, type_hint, nullptr);
+void LocalSession::CopyToRemote(DLTensor* from, DLTensor* to) {
+  TVMContext ctx_to = to->ctx;
+  this->GetDeviceAPI(ctx_to)->CopyDataFromTo(from, to, nullptr);
   // Copy can happen asynchrously
   // synchronize to make sure that copy is completed
   this->GetDeviceAPI(ctx_to)->StreamSync(ctx_to, nullptr);
 }
 
-void LocalSession::CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset,
-                                  size_t nbytes, TVMContext ctx_from, DLDataType type_hint) {
-  TVMContext cpu_ctx;
-  cpu_ctx.device_type = kDLCPU;
-  cpu_ctx.device_id = 0;
-
-  this->GetDeviceAPI(ctx_from)->CopyDataFromTo(from, from_offset, to, to_offset, nbytes, ctx_from,
-                                               cpu_ctx, type_hint, nullptr);
+void LocalSession::CopyFromRemote(DLTensor* from, DLTensor* to) {
+  TVMContext ctx_from = from->ctx;
+  this->GetDeviceAPI(ctx_from)->CopyDataFromTo(from, to, nullptr);
   // Copy can happen asynchrously
   // synchronize to make sure that copy is completed
   this->GetDeviceAPI(ctx_from)->StreamSync(ctx_from, nullptr);

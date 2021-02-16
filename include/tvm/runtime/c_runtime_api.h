@@ -581,10 +581,7 @@ TVM_DLL int TVMDeviceFreeDataSpace(TVMContext ctx, void* ptr);
  * \param stream Optional stream object.
  * \return 0 when success, -1 when failure happens.
  */
-TVM_DLL int TVMDeviceCopyDataFromTo(const void* from, size_t from_offset, void* to,
-                                    size_t to_offset, size_t num_bytes, TVMContext ctx_from,
-                                    TVMContext ctx_to, DLDataType type_hint,
-                                    TVMStreamHandle stream);
+TVM_DLL int TVMDeviceCopyDataFromTo(DLTensor* from, DLTensor* to, TVMStreamHandle stream);
 
 /*!
  * \brief Check that an object is derived from another.

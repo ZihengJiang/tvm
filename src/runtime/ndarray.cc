@@ -59,36 +59,34 @@ inline void VerifyDataType(DLDataType dtype) {
   ICHECK_EQ(dtype.bits & (dtype.bits - 1), 0);
 }
 
-inline size_t GetDataAlignment(const DLTensor& arr) {
-  size_t align = (arr.dtype.bits / 8) * arr.dtype.lanes;
-  if (align < kAllocAlignment) return kAllocAlignment;
-  return align;
-}
-
 void ArrayCopyFromBytes(DLTensor* handle, const void* data, size_t nbytes) {
-  TVMContext cpu_ctx;
-  cpu_ctx.device_type = kDLCPU;
-  cpu_ctx.device_id = 0;
   size_t arr_size = GetDataSize(*handle);
   ICHECK_EQ(arr_size, nbytes) << "ArrayCopyFromBytes: size mismatch";
   ICHECK(IsContiguous(*handle)) << "ArrayCopyFromBytes only support contiguous array for now";
-  DeviceAPI::Get(handle->ctx)
-      ->CopyDataFromTo(data, 0, handle->data, static_cast<size_t>(handle->byte_offset), nbytes,
-                       cpu_ctx, handle->ctx, handle->dtype, nullptr);
+
+  TVMContext cpu_ctx;
+  cpu_ctx.device_type = kDLCPU;
+  cpu_ctx.device_id = 0;
+  DLTensor from{const_cast<void*>(data), cpu_ctx, handle->ndim, handle->dtype, handle->shape,
+                handle->strides, handle->byte_offset};
+
+  DeviceAPI::Get(handle->ctx)->CopyDataFromTo(&from, handle, nullptr);
   // Synchronize in case data become unavailable later.
   DeviceAPI::Get(handle->ctx)->StreamSync(handle->ctx, nullptr);
 }
 
 void ArrayCopyToBytes(const DLTensor* handle, void* data, size_t nbytes) {
-  TVMContext cpu_ctx;
-  cpu_ctx.device_type = kDLCPU;
-  cpu_ctx.device_id = 0;
   size_t arr_size = GetDataSize(*handle);
   ICHECK_EQ(arr_size, nbytes) << "ArrayCopyToBytes: size mismatch";
   ICHECK(IsContiguous(*handle)) << "ArrayCopyToBytes only support contiguous array for now";
-  DeviceAPI::Get(handle->ctx)
-      ->CopyDataFromTo(handle->data, static_cast<size_t>(handle->byte_offset), data, 0, nbytes,
-                       handle->ctx, cpu_ctx, handle->dtype, nullptr);
+
+  TVMContext cpu_ctx;
+  cpu_ctx.device_type = kDLCPU;
+  cpu_ctx.device_id = 0;
+  DLTensor to{data, cpu_ctx, handle->ndim, handle->dtype, handle->shape,
+              handle->strides, handle->byte_offset};
+
+  DeviceAPI::Get(handle->ctx)->CopyDataFromTo(const_cast<DLTensor*>(handle), &to, nullptr);
   // Synchronize in case data become unavailable later.
   DeviceAPI::Get(handle->ctx)->StreamSync(handle->ctx, nullptr);
 }
@@ -236,9 +234,7 @@ void NDArray::CopyFromTo(const DLTensor* from, DLTensor* to, TVMStreamHandle str
   // api manager.
   TVMContext ctx = from->ctx.device_type != kDLCPU ? from->ctx : to->ctx;
 
-  DeviceAPI::Get(ctx)->CopyDataFromTo(from->data, static_cast<size_t>(from->byte_offset), to->data,
-                                      static_cast<size_t>(to->byte_offset), from_size, from->ctx,
-                                      to->ctx, from->dtype, stream);
+  DeviceAPI::Get(ctx)->CopyDataFromTo(const_cast<DLTensor*>(from), to, stream);
 }
 
 std::vector<int64_t> NDArray::Shape() const { return get_mutable()->shape_; }
