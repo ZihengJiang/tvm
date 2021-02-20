@@ -448,46 +448,38 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
   }
 
   void HandleCopyToRemote() {
-    uint64_t handle, data_handle, ndim, shape_handle;
-    TVMContext ctx;
-    DLDataType dtype;
-    this->Read(&handle);
+    DLTensor* arr = this->ArenaAlloc<DLTensor>(1);
+    uint64_t data_handle;
     this->Read(&data_handle);
-    this->Read(&ctx);
-    this->Read(&ndim);
-    // Read shape
-    this->Read(&shape_handle);
-    this->Read(&dtype);
+    arr->data = reinterpret_cast<void*>(data_handle);
+    this->Read(&(arr->ctx));
+    this->Read(&(arr->ndim));
+    this->Read(&(arr->dtype));
+    arr->strides = nullptr;
+    this->Read(&(arr->byte_offset));
+    arr->shape = this->ArenaAlloc<int64_t>(arr->ndim);
+    this->ReadArray(arr->shape, arr->ndim);
 
-    uint64_t offset = 0;
-    uint64_t shape_bytes = ndim * sizeof(int64_t);
-    uint64_t data_bytes;
-    this->Read(&data_bytes);
+    size_t data_bytes = GetDataSize(*arr);
     size_t elem_bytes = (dtype.bits * dtype.lanes + 7) / 8;
     auto* sess = GetServingSession();
 
     // When session is local, we can directly treat handle
     // as the cpu pointer without allocating a temp space.
     if (ctx.device_type == kDLCPU && sess->IsLocalSession()) {
-      char* sptr = reinterpret_cast<char*>(shape_handle);
-      this->ReadArray(sptr, shape_bytes);
-      char* dptr = reinterpret_cast<char*>(data_handle) + offset;
+      char* dptr = reinterpret_cast<char*>(data_handle) + arr->byte_offset;
       this->ReadArray(dptr, data_bytes);
 
       if (!DMLC_IO_NO_ENDIAN_SWAP) {
-        dmlc::ByteSwap(sptr, sizeof(int64_t),  ndim);
         dmlc::ByteSwap(dptr, elem_bytes, data_bytes / elem_bytes);
       }
       this->ReturnVoid();
       this->SwitchToState(kRecvPacketNumBytes);
     } else {
-      char* temp_shape = this->ArenaAlloc<char>(shape_bytes);
-      this->ReadArray(temp_shape, shape_bytes);
       char* temp_data = this->ArenaAlloc<char>(data_bytes);
       this->ReadArray(temp_data, data_bytes);
 
       if (!DMLC_IO_NO_ENDIAN_SWAP) {
-        dmlc::ByteSwap(temp_shape, sizeof(int64_t),  ndim);
         dmlc::ByteSwap(temp_data, elem_bytes, data_bytes / elem_bytes);
       }
 
@@ -501,12 +493,10 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
         }
       };
 
-      DLTensor temp_tensor{temp_data, {kDLCPU, 0}, ndim, temp_shape, nullptr, 0};
+      // DLTensor temp_tensor{temp_data, {kDLCPU, 0}, ndim, temp_shape, nullptr, 0};
       DLTensor to_tensor{data_handle, ctx, ndim, shape_handle, nullptr, 0};
       this->SwitchToState(kWaitForAsyncCallback);
-      sess->AsyncCopyToRemote(&temp_tensor, &to_tensor, on_copy_complete);
-      // sess->AsyncCopyToRemote(temp_data, 0, reinterpret_cast<void*>(handle), offset, num_bytes, ctx,
-      //                         type_hint, on_copy_complete);
+      sess->AsyncCopyToRemote(temp_data, 0, &to_tensor, on_copy_complete);
     }
   }
 
@@ -838,41 +828,36 @@ void RPCEndpoint::CallFunc(RPCSession::PackedFuncHandle h, const TVMValue* arg_v
   ICHECK(code == RPCCode::kReturn) << "code=" << static_cast<int>(code);
 }
 
-void RPCEndpoint::CopyToRemote(DLTensor* from, DLTensor* to, DLDataType type_hint) {
+void RPCEndpoint::CopyToRemote(void* from_bytes, int nbytes, DLTensor* to) {
   std::lock_guard<std::mutex> lock(mutex_);
   RPCCode code = RPCCode::kCopyToRemote;
-  // TODO(ziheng): Question: do we need to pass the pointer of to
-  uint64_t to_handle = reinterpret_cast<uint64_t>(to);
-  uint64_t to_data = reinterpret_cast<uint64_t>(to->data);
-  DLDataType to_dtype = to->dtype;
-  uint64_t to_ndim = static_cast<uint64_t>(to->ndim);
-  int64_t* to_shape = to->shape;
-  uint64_t shape_size = to_ndim * 8;
-  uint64_t data_size = static_cast<uint64_t>(GetDataSize(*from));
 
-  uint64_t packet_nbytes = sizeof(code) + sizeof(to_handle) + sizeof(to_data) + 
-                           sizeof(to_ctx) + sizeof(to_ndim) + sizeof(to_shape) + shape_size +
-                           sizeof(to_dtype) + sizeof(data_size) + data_size;
+  if (to->strides != nullptr) {
+    channel->ThrowError(RPCServerStatus::kInvalidDLTensorFieldStride);
+  }
+  uint64_t data_size = static_cast<uint64_t>(GetDataSize(*to));
+  uint64_t shape_size = to->ndim * sizeof(int64_t);
+  CHECK_EQ(nbytes, data_size);
+
+  uint64_t to_data = reinterpret_cast<uint64_t>(to->data);
+  DLContext to_ctx = to->ctx;
+  DLDataType to_dtype = to->dtype;
+  int to_ndim = to->ndim;
+  uint64_t to_offset = to->byte_offset;
+  int64_t* to_shape = to->shape;
+  uint64_t packet_nbytes = sizeof(code) + sizeof(to_data) + sizeof(to_ctx) +
+                           sizeof(to_ndim) + sizeof(to_dtype) + sizeof(to_offset) +
+                           shape_size + data_size;
 
   handler_->Write(packet_nbytes);
   handler_->Write(code);
-  // TODO(ziheng) do we need to pass the dltensor pointer?
-  handler_->Write(to_handle);
   handler_->Write(to_data);
   handler_->Write(to_ctx);
   handler_->Write(to_ndim);
-  handler_->Write(to_shape);
   handler_->Write(to_dtype);
-  handler_->Write(data_size);
-  // TODO(ziheng) why left strides and byte_offseet
-  if (arr->strides != nullptr) {
-    channel->ThrowError(RPCServerStatus::kInvalidDLTensorFieldStride);
-  }
-  if (arr->byte_offset != 0) {
-    channel->ThrowError(RPCServerStatus::kInvalidDLTensorFieldByteOffset);
-  }
+  handler_->Write(to_offset);
   handler_->WriteArray(to_shape, to_ndim);
-  handler_->WriteArray(reinterpret_cast<char*>(from->data) + from->byte_offset, data_size);
+  handler_->WriteArray(reinterpret_cast<char*>(from_bytes), nbytes);
   ICHECK(HandleUntilReturnEvent(true, [](TVMArgs) {}) == RPCCode::kReturn);
 }
 
