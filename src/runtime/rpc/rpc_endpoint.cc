@@ -394,12 +394,13 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
     this->Read(&(arr->ctx));
     this->Read(&(arr->ndim));
     this->Read(&(arr->dtype));
-    arr->strides = nullptr;
-    this->Read(&(arr->byte_offset));
     arr->shape = this->ArenaAlloc<int64_t>(arr->ndim);
     this->ReadArray(arr->shape, arr->ndim);
+    arr->strides = nullptr;
+    this->Read(&(arr->byte_offset));
 
-    size_t data_bytes = GetDataSize(*arr);
+    uint64_t data_bytes;
+    this->Read(&data_bytes);
     size_t elem_bytes = (arr->dtype.bits * arr->dtype.lanes + 7) / 8;
     auto* sess = GetServingSession();
     // Return Copy Ack with the given data
@@ -447,12 +448,13 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
     this->Read(&(arr->ctx));
     this->Read(&(arr->ndim));
     this->Read(&(arr->dtype));
-    arr->strides = nullptr;
-    this->Read(&(arr->byte_offset));
     arr->shape = this->ArenaAlloc<int64_t>(arr->ndim);
     this->ReadArray(arr->shape, arr->ndim);
+    arr->strides = nullptr;
+    this->Read(&(arr->byte_offset));
 
-    size_t data_bytes = GetDataSize(*arr);
+    uint64_t data_bytes;
+    this->Read(&data_bytes);
     size_t elem_bytes = (arr->dtype.bits * arr->dtype.lanes + 7) / 8;
     auto* sess = GetServingSession();
 
@@ -818,13 +820,12 @@ void RPCEndpoint::CallFunc(RPCSession::PackedFuncHandle h, const TVMValue* arg_v
   ICHECK(code == RPCCode::kReturn) << "code=" << static_cast<int>(code);
 }
 
-void RPCEndpoint::CopyToRemote(void* from_bytes, DLTensor* to, size_t nbytes) {
+void RPCEndpoint::CopyToRemote(void* from_bytes, DLTensor* to, uint64_t nbytes) {
   std::lock_guard<std::mutex> lock(mutex_);
   RPCCode code = RPCCode::kCopyToRemote;
 
   uint64_t num_data_bytes = static_cast<uint64_t>(GetDataSize(*to));
   ICHECK_EQ(nbytes, num_data_bytes);
-  ICHECK(to->strides == nullptr);
   uint64_t num_shape_bytes = to->ndim * sizeof(int64_t);
 
   uint64_t to_data = reinterpret_cast<uint64_t>(to->data);
@@ -835,7 +836,7 @@ void RPCEndpoint::CopyToRemote(void* from_bytes, DLTensor* to, size_t nbytes) {
   int64_t* to_shape = to->shape;
   uint64_t packet_nbytes = sizeof(code) + sizeof(to_data) + sizeof(to_ctx) +
                            sizeof(to_ndim) + sizeof(to_dtype) + sizeof(to_offset) +
-                           num_shape_bytes + num_data_bytes;
+                           num_shape_bytes + sizeof(nbytes) + num_data_bytes;
 
   handler_->Write(packet_nbytes);
   handler_->Write(code);
@@ -843,19 +844,20 @@ void RPCEndpoint::CopyToRemote(void* from_bytes, DLTensor* to, size_t nbytes) {
   handler_->Write(to_ctx);
   handler_->Write(to_ndim);
   handler_->Write(to_dtype);
-  handler_->Write(to_offset);
   handler_->WriteArray(to_shape, to_ndim);
+  ICHECK(to->strides == nullptr);
+  handler_->Write(to_offset);
+  handler_->Write(nbytes);
   handler_->WriteArray(reinterpret_cast<char*>(from_bytes), nbytes);
   ICHECK(HandleUntilReturnEvent(true, [](TVMArgs) {}) == RPCCode::kReturn);
 }
 
-void RPCEndpoint::CopyFromRemote(DLTensor* from, void* to_bytes, size_t nbytes) {
+void RPCEndpoint::CopyFromRemote(DLTensor* from, void* to_bytes, uint64_t nbytes) {
   std::lock_guard<std::mutex> lock(mutex_);
   RPCCode code = RPCCode::kCopyFromRemote;
 
   uint64_t num_data_bytes = static_cast<uint64_t>(GetDataSize(*from));
   CHECK_EQ(nbytes, num_data_bytes);
-  ICHECK(from->strides == nullptr);
   uint64_t num_shape_bytes = from->ndim * sizeof(int64_t);
 
   uint64_t from_data = reinterpret_cast<uint64_t>(from->data);
@@ -866,7 +868,7 @@ void RPCEndpoint::CopyFromRemote(DLTensor* from, void* to_bytes, size_t nbytes) 
   int64_t* from_shape = from->shape;
   uint64_t packet_nbytes = sizeof(code) + sizeof(from_data) + sizeof(from_ctx) +
                            sizeof(from_ndim) + sizeof(from_dtype) + sizeof(from_offset) +
-                           num_shape_bytes + num_data_bytes;
+                           num_shape_bytes + sizeof(nbytes);
 
   handler_->Write(packet_nbytes);
   handler_->Write(code);
@@ -874,8 +876,10 @@ void RPCEndpoint::CopyFromRemote(DLTensor* from, void* to_bytes, size_t nbytes) 
   handler_->Write(from_ctx);
   handler_->Write(from_ndim);
   handler_->Write(from_dtype);
-  handler_->Write(from_offset);
   handler_->WriteArray(from_shape, from_ndim);
+  ICHECK(from->strides == nullptr);
+  handler_->Write(from_offset);
+  handler_->Write(nbytes);
   ICHECK(HandleUntilReturnEvent(true, [](TVMArgs) {}) == RPCCode::kCopyAck);
 
   handler_->ReadArray(reinterpret_cast<char*>(to_bytes), nbytes);

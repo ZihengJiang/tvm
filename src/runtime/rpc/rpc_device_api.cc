@@ -109,6 +109,14 @@ class RPCDeviceAPI final : public DeviceAPI {
   }
 
  private:
+
+  void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset,
+                      size_t num_bytes, TVMContext ctx_from, TVMContext ctx_to,
+                      DLDataType type_hint, TVMStreamHandle stream) final {
+    LOG(FATAL) << "Not implemented.";
+  }
+
+
   std::shared_ptr<RPCSession> GetSess(TVMContext ctx) {
     int tbl_index = GetRPCSessionIndex(ctx);
     return RPCSession::Get(tbl_index);

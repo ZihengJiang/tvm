@@ -148,7 +148,7 @@ void* DeviceAPI::AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape,
                                 DLDataType dtype, Optional<String> mem_scope) {
   if (mem_scope == nullptr || mem_scope.value() == "global") {
     // setup memory content
-    DLTensor temp{nullptr, ctx, shape.size(), dtype, shape.data(), nullptr, 0};
+    DLTensor temp{nullptr, ctx, static_cast<int>(shape.size()), dtype, shape.data(), nullptr, 0};
     size_t size = GetDataSize(temp);
     size_t alignment = GetDataAlignment(temp);
     return AllocDataSpace(ctx, size, alignment, dtype);
@@ -169,9 +169,9 @@ void DeviceAPI::CopyDataFromTo(DLTensor* from, DLTensor* to, TVMStreamHandle str
                  nbytes, from->ctx, to->ctx, from->dtype, stream);
 }
 
-void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset,
-                    size_t num_bytes, TVMContext ctx_from, TVMContext ctx_to,
-                    DLDataType type_hint, TVMStreamHandle stream) {
+void DeviceAPI::CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset,
+                               size_t num_bytes, TVMContext ctx_from, TVMContext ctx_to,
+                               DLDataType type_hint, TVMStreamHandle stream) {
   LOG(FATAL) << "Device does not support CopyDataFromTo.";
 }
 

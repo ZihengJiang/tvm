@@ -277,6 +277,7 @@ def empty(shape, dtype="float32", ctx=context(1, 0), mem_scope=None):
     ptr = arr.ctypes.data_as(ctypes.POINTER(ctypes.c_int64))
     shape_ptr =  ctypes.cast(ptr, ctypes.c_void_p)
     ndim = len(shape)
+    dtype = DataType(dtype)
     arr = _ffi_api.TVMArrayAllocWithScope(shape_ptr, ndim, dtype, ctx, mem_scope)
     return arr
 

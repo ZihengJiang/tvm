@@ -190,7 +190,6 @@ NDArray NDArray::Empty(std::vector<int64_t> shape, DLDataType dtype,
   NDArray ret = Internal::Create(shape, dtype, ctx);
   ret.get_mutable()->dl_tensor.data =
       DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, shape, ret->dtype, mem_scope);
-  LOG(INFO) << "NDArray::Empty exit";
   return ret;
 }
 
