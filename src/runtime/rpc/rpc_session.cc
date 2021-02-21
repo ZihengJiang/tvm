@@ -51,28 +51,28 @@ void RPCSession::AsyncCallFunc(PackedFuncHandle func, const TVMValue* arg_values
   }
 }
 
-void RPCSession::AsyncCopyToRemote(DLTensor* local_from, DLTensor* remote_to,
-                                   RPCSession::FAsyncCallback callback) {
+void RPCSession::AsyncCopyToRemote(void* local_from_bytes, DLTensor* remote_to,
+                                   size_t nbytes, RPCSession::FAsyncCallback callback) {
   TVMValue value;
   int32_t tcode = kTVMNullptr;
   value.v_handle = nullptr;
 
   try {
-    this->CopyToRemote(local_from, remote_to); 
+    this->CopyToRemote(local_from_bytes, remote_to, nbytes); 
     callback(RPCCode::kReturn, TVMArgs(&value, &tcode, 1));
   } catch (const std::runtime_error& e) {
     this->SendException(callback, e.what());
   }
 }
 
-void RPCSession::AsyncCopyFromRemote(DLTensor* remote_from, DLTensor* local_to,
-                                     RPCSession::FAsyncCallback callback) {
+void RPCSession::AsyncCopyFromRemote(DLTensor* remote_from, void* local_to_bytes,
+                                     size_t nbytes, RPCSession::FAsyncCallback callback) {
   TVMValue value;
   int32_t tcode = kTVMNullptr;
   value.v_handle = nullptr;
 
   try {
-    this->CopyFromRemote(remote_from, local_to);
+    this->CopyFromRemote(remote_from, local_to_bytes, nbytes);
     callback(RPCCode::kReturn, TVMArgs(&value, &tcode, 1));
   } catch (const std::runtime_error& e) {
     this->SendException(callback, e.what());

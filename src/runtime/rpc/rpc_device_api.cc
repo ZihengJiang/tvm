@@ -85,18 +85,19 @@ class RPCDeviceAPI final : public DeviceAPI {
       if (remote_ctx.device_type == kDLCPU) remote_ctx = remote_ctx_to;
       GetSess(ctx_from)->GetDeviceAPI(remote_ctx)->CopyDataFromTo(&from_tensor, &to_tensor, stream);
     } else if (IsRPCSessionContext(ctx_from) && ctx_to.device_type == kDLCPU) {
+      size_t nbytes = GetDataSize(*to);
       auto remote_ctx_from = RemoveRPCSessionMask(ctx_from);
       void* from_data = static_cast<const RemoteSpace*>(from->data)->data;
-      size_t size = GetDataSize(*to);
-      GetSess(ctx_from)->CopyFromRemote(from_data, from->byte_offset,
-                                        to->data, to->byte_offset, size, remote_ctx_from, from->dtype);
+      DLTensor remote_from{from_data, remote_ctx_from, from->ndim, from->dtype,
+                           from->shape, from->strides, from->byte_offset};
+      GetSess(ctx_from)->CopyFromRemote(&remote_from, static_cast<char*>(to->data) + to->byte_offset, nbytes);
     } else if (ctx_from.device_type == kDLCPU && IsRPCSessionContext(ctx_to)) {
+      size_t nbytes = GetDataSize(*from);
       auto remote_ctx_to = RemoveRPCSessionMask(ctx_to);
       void* to_data = static_cast<const RemoteSpace*>(to->data)->data;
-      size_t size = GetDataSize(*from);
-      GetSess(ctx_to)->CopyToRemote(const_cast<void*>(from->data), from->byte_offset,
-                                    to->data, to->byte_offset, size,
-                                    remote_ctx_to, from->dtype);
+      DLTensor to_tensor{to_data, remote_ctx_to, to->ndim, to->dtype,
+                         to->shape, to->strides, to->byte_offset};
+      GetSess(ctx_to)->CopyToRemote(static_cast<char*>(from->data) + from->byte_offset, &to_tensor, nbytes);
     } else {
       LOG(FATAL) << "expect copy from/to remote or between remote";
     }

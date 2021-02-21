@@ -135,7 +135,7 @@ class RPCSession {
    * \param remote_ctx_to The target context.
    * \param type_hint Hint of content data type.
    */
-  virtual void CopyToRemote(DLTensor* local_from, DLTensor* remote_to) = 0;
+  virtual void CopyToRemote(void* local_from_bytes, DLTensor* remote_to, size_t nbytes) = 0;
   /*!
    * \brief Copy bytes from remote array content.
    * \param remote_from The source host data.
@@ -146,7 +146,7 @@ class RPCSession {
    * \param remote_ctx_from The source context in the remote.
    * \param type_hint Hint of content data type.
    */
-  virtual void CopyFromRemote(DLTensor* remote_from, DLTensor* local_to) = 0;
+  virtual void CopyFromRemote(DLTensor* remote_from, void* local_to_bytes, size_t nbytes) = 0;
 
   /*!
    * \brief Free a remote function.
@@ -231,8 +231,8 @@ class RPCSession {
    * \note All the allocated memory in local_from, and remote_to
    *       must stay alive until on_compelete is called.
    */
-  virtual void AsyncCopyToRemote(DLTensor* local_from, DLTensor* remote_to,
-                                 FAsyncCallback on_complete);
+  virtual void AsyncCopyToRemote(void* local_from_bytes, DLTensor* remote_to,
+                                 size_t nbytes, FAsyncCallback on_complete);
 
   /*!
    * \brief Asynchrous version of CopyFromRemote.
@@ -249,8 +249,8 @@ class RPCSession {
    * \note All the allocated memory in remote_from, and local_to
    *       must stay alive until on_compelete is called.
    */
-  virtual void AsyncCopyFromRemote(DLTensor* remote_from, DLTensor* local_to,
-                                   FAsyncCallback on_complete);
+  virtual void AsyncCopyFromRemote(DLTensor* remote_from, void* local_to_bytes,
+                                   size_t nbytes, FAsyncCallback on_complete);
   /*!
    * \brief Asynchrously wait for all events in ctx, stream compeletes.
    * \param ctx The device context.

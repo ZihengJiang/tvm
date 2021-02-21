@@ -87,17 +87,25 @@ void LocalSession::CallFunc(RPCSession::PackedFuncHandle func, const TVMValue* a
   this->EncodeReturn(std::move(rv), encode_return);
 }
 
-void LocalSession::CopyToRemote(DLTensor* from, DLTensor* to) {
+void LocalSession::CopyToRemote(void* from_bytes, DLTensor* to, size_t nbytes) {
+  ICHECK_EQ(nbytes, GetDataSize(*to));
+  std::vector<int64_t> shape(to->shape, to->shape + to->ndim);
+  DLTensor from{from_bytes, {kDLCPU, 0}, to->ndim, to->dtype, shape.data(), nullptr, 0};
+
   TVMContext ctx_to = to->ctx;
-  this->GetDeviceAPI(ctx_to)->CopyDataFromTo(from, to, nullptr);
+  this->GetDeviceAPI(ctx_to)->CopyDataFromTo(&from, to, nullptr);
   // Copy can happen asynchrously
   // synchronize to make sure that copy is completed
   this->GetDeviceAPI(ctx_to)->StreamSync(ctx_to, nullptr);
 }
 
-void LocalSession::CopyFromRemote(DLTensor* from, DLTensor* to) {
+void LocalSession::CopyFromRemote(DLTensor* from, void* to_bytes, size_t nbytes) {
+  ICHECK_EQ(nbytes, GetDataSize(*from));
+  std::vector<int64_t> shape(from->shape, from->shape + from->ndim);
+  DLTensor to{to_bytes, {kDLCPU, 0}, from->ndim, from->dtype, shape.data(), nullptr, 0};
+
   TVMContext ctx_from = from->ctx;
-  this->GetDeviceAPI(ctx_from)->CopyDataFromTo(from, to, nullptr);
+  this->GetDeviceAPI(ctx_from)->CopyDataFromTo(from, &to, nullptr);
   // Copy can happen asynchrously
   // synchronize to make sure that copy is completed
   this->GetDeviceAPI(ctx_from)->StreamSync(ctx_from, nullptr);

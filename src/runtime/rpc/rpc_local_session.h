@@ -48,9 +48,9 @@ class LocalSession : public RPCSession {
   void CallFunc(PackedFuncHandle func, const TVMValue* arg_values, const int* arg_type_codes,
                 int num_args, const FEncodeReturn& fencode_return) override;
 
-  void CopyToRemote(DLTensor* from, DLTensor* to) override;
+  void CopyToRemote(void* from_bytes, DLTensor* to, size_t nbytes) override;
 
-  void CopyFromRemote(DLTensor* from, DLTensor* to) override;
+  void CopyFromRemote(DLTensor* from, void* to_bytes, size_t nbytes) override;
 
   void FreeHandle(void* handle, int type_code) override;
 
