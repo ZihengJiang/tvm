@@ -146,20 +146,15 @@ void* DeviceAPI::AllocWorkspace(TVMContext ctx, size_t size, DLDataType type_hin
 
 void* DeviceAPI::AllocDataSpace(TVMContext ctx, std::vector<int64_t> shape, 
                                 DLDataType dtype, Optional<String> mem_scope) {
-  if (mem_scope == nullptr || mem_scope.value() == "global") {
+  if (mem_scope.defined() || mem_scope.value() == "global") {
     // setup memory content
     DLTensor temp{nullptr, ctx, static_cast<int>(shape.size()), dtype, shape.data(), nullptr, 0};
     size_t size = GetDataSize(temp);
     size_t alignment = GetDataAlignment(temp);
     return AllocDataSpace(ctx, size, alignment, dtype);
   }
-  return AllocDataSpaceWithScope(ctx, shape, dtype, mem_scope.value());
-}
-
-void* DeviceAPI::AllocDataSpaceWithScope(TVMContext ctx, std::vector<int64_t> shape, 
-                                         DLDataType dtype, String mem_scope) {
   LOG(FATAL) << "Device does not support allocate data space with "
-    << "specified memory scope: " << mem_scope;
+    << "specified memory scope: " << mem_scope.value();
   return nullptr;
 }
 
